@@ -9,7 +9,6 @@ import sys
 from time import sleep
 import MySQLdb
 
-
 class naNbotDB:
 	def __init__(self):
 		print ("[+] Starting DB...")
@@ -19,55 +18,51 @@ class naNbotDB:
 	def exec(self,query):
 		return self.cursor.execute(query)		
 
-def guarda_enlaces(msg):
-	global cursor
-	global cache
-	if len(cache) > 2: #si en la cache hemos alcanzado los 100 comandos, procedemos a guardar, es importante tener suficentes urls a explorar, si no esto falla
-		print "Cache lleno, volcando en la base de datos..."
-		for msg2 in cache:
-			#try:#separamos cada enlace en un array ignorando los 3 primeros caractres que corresponden con "EN "
-			enlaces=msg2[3:].split(" ")
-			host=enlaces.pop(0)
-			if len(enlaces) > 0:
-				for enlace in enlaces: #vamos extraiendo los enlaces uno a uno
-					#r=cursor.execute("select * from enlaces where url='"+enlace+"'") #comprobamos si existe el enlace
-					enlace=enlace.replace("'","%27")
-					enlace=enlace.replace("\'","%27")
-					enlace=enlace.replace("//","/")
-					enlace=enlace.replace("///","/")
-					enlace=enlace.replace("////","/")
-					enlace=enlace.replace("http:/","http://")
-					consulta="insert into enlaces (url,urlorigen) values ('"+enlace+"','"+host+"')"
-					print (consulta)
-					r=copyenlaces.count(enlace)
-					if r <= 0:# si el enlace no existe
-						try:
-							cursor.execute(consulta)
-							copyenlaces.append(enlace)
-						except:
-							print "Fallo al procesar el enlace "+enlace+ "Host: "+host
-							print "Consulta: "+consulta
-			#except: #en caso de fallo, informamos
-			#	print "No se pudieron procesar los enlaces: "+msg
-		cache[:]=[]#vaciamos la cache
-	else:
-		#print "\r Cache: %s" % (str(len(cache)))
-		cache.append(msg)
 
+class naNbotWorker:
+	def __init__(self):
+		print("[+] Starting worker..")
+		self.cache=[] #definimos la cache de todos los datos encontrados, mas tarde procesaremos todo
+		self.maxLenCache = 2
+		self.DB=naNbotDB()
 
-def guarda_descargas(msg):
-	global cursor
-	try:
-		descargas=msg[3:].split(" ")
-		host=descargas.pop(0)#extraemos el host donde se encntraban los enlaces
-		if len(descargas) > 0: #si una vez extraido el comando y el host principal hay datos en "descargas" significa que son las descargas que guardaremos en la db
-			print "Descargas encontradas"
-			for descarga in descargas:#vamos extraiendo las descargas una a una
-				r=cursor.execute("select * from descargas where url='"+descarga+"'")#comprobamos si existe la descarga en la db
-				if r <= 0:#si no existe la descarga
-					cursor.execute("insert into descargas (url,origen) values ('"+descarga+"','"+host+"')")
-	except:
-		print "No se guardaron las descargas: "+msg
+	###
+	def foundLinks(self,msg):
+		self.cache.append(msg)
+		if len(self.cache) > self.maxLenCache:
+			self.unpackCache()	
+
+	def unpackCache(self):
+		for msg in self.cache:
+			links = msg[3:].split(" ") #3 first words out ("EN ") and links to array
+			if len(links) > 1: # >1 because first is the host and next the links
+				self.processLInks(links)
+
+	def processLinks(self,links):
+		host = links.pop(0) #extract host (first element)
+		for link in links:
+			# TODO here we clean the link
+			# TODO insert only if link does not exist
+			self.DB.exec("insert into enlaces (url,urlorigen) values ('"+link+"','"+host+"')")
+			#enlace=enlace.replace("'","%27")
+			#enlace=enlace.replace("\'","%27")
+			#enlace=enlace.replace("//","/")
+			#enlace=enlace.replace("///","/")
+			#enlace=enlace.replace("////","/")
+			#enlace=enlace.replace("http:/","http://")
+
+	###
+	def foundDownloads(self,msg):
+		downs = msg[3:].split(" ")
+		if downs > 1:
+			self.processDownloads(downs)
+			
+	def processDownloads(self,downs):
+		host = downs.pop(0)
+		for down in downs:
+			# TODO do it only if down dows not exist
+			self.DB.exec("insert into descargas (url,origen) values ('"+descarga+"','"+host+"')")
+
 
 
 #funcion que extraera enlaces de la DB segun su numero de visitas: esperemos que funcione correctamente cuando tenga un numero de clientes elevado :S
@@ -136,7 +131,7 @@ class naNbotMain:
 
 		self.server.listen(999) #max connections
 		self.desc = [self.server] #store the server sock first, necesary?
-		self.cache=[] #definimos la cache de todos los datos encontrados, mas tarde procesaremos todo
+		#self.cache=[] #definimos la cache de todos los datos encontrados, mas tarde procesaremos todo
 		self.IA=naNbotIA()
 
 	def mainLoop(self):
@@ -179,17 +174,19 @@ class naNbotMain:
 class naNbotIA:
 	def __init__(self):
 		print ("[+] Starting IA 1+1=3...")
+		self.worker = naNbotWorker()
+
 
 	def msgClient(msg):
 		#client found links
 		if   msg[:2] == "EN":
-			guarda_enlaces(msg)
+			self.worker.foundLinks(msg)
 			return "OK"
 
 
 		#client found downloads
 		elif msg[:2] == "DE": 
-			guarda_descargas(msg)
+			self.worker.foundDownloads(msg)
 			return "OK"
 
 
