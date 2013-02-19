@@ -10,7 +10,7 @@ from time import sleep
 import MySQLdb
 
 def mysql_conect():
-	db=MySQLdb.connect(host='localhost',user='user_for_naNbot85',passwd='pass_for_naNbot85',db='pydirect')
+	db=MySQLdb.connect(host='localhost',user='user_for_naNbot85',passwd='pass_for_naNbot85',db='naNbot85db')
 	cursor=db.cursor()
 	return cursor
 
