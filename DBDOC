@@ -1,0 +1,17 @@
+CREATE DATABASE naNbot85;
+USE naNbot85;
+CREATE TABLE enlaces (
+	id bigint NOT NULL auto_increment,
+	url varchar(255) NOT NULL default '',
+	urlorigen varchar(255) NOT NULL default '',
+	explorado int(255) NOT NULL default '0',
+	PRIMARY KEY  (id)
+);
+CREATE TABLE descargas (
+        id bigint NOT NULL auto_increment,
+        url varchar(255) NOT NULL default '',
+        urlorigen varchar(255) NOT NULL default '',
+        mimetype varchar(255) NOT NULL default '',
+        PRIMARY KEY  (id)
+);
+GRANT ALL PRIVILEGES ON naNbot85.* TO naNbot85@'localhost' IDENTIFIED BY 'naNbot85';
