@@ -12,12 +12,15 @@ import MySQLdb
 class naNbotDB:
 	def __init__(self):
 		print ("[+] Starting DB...")
-		db=MySQLdb.connect(host='localhost',user='naNbot85',passwd='naNbot85',db='naNbot85')
+		db=MySQLdb.connect(host='localhost',user='naNbot85',
+		passwd='naNbot85',db='naNbot85')
 		self.cursor=db.cursor()
 
-	def exec(self,query):
+	def query(self,query):
 		return self.cursor.execute(query)		
 
+	def fetchall(self):
+		return self.cursor.fetchall()
 
 class naNbotWorker:
 	def __init__(self):
@@ -43,7 +46,7 @@ class naNbotWorker:
 		for link in links:
 			# TODO here we clean the link
 			# TODO insert only if link does not exist
-			self.DB.exec("insert into enlaces (url,urlorigen) values ('"+link+"','"+host+"')")
+			self.DB.query("insert into enlaces (url,urlorigen) values ('"+link+"','"+host+"')")
 			#enlace=enlace.replace("'","%27")
 			#enlace=enlace.replace("\'","%27")
 			#enlace=enlace.replace("//","/")
@@ -61,62 +64,32 @@ class naNbotWorker:
 		host = downs.pop(0)
 		for down in downs:
 			# TODO do it only if down dows not exist
-			self.DB.exec("insert into descargas (url,origen) values ('"+descarga+"','"+host+"')")
+			self.DB.query("insert into descargas (url,origen) values ('"+descarga+"','"+host+"')")
 
 
+	###
+	def getLink(self):
+		if self.DB.query("select url from enlaces order by explorado asc limit 1") > 1:
+			result = self.DB.fetchall()
+			self.DB.query("update enlaces set explorado=explorado+1 where url='"+result[0]+"'")
+			return result[0]
+		else:
+			return "http://localhost" #TODO or maybe WAIT
 
-#funcion que extraera enlaces de la DB segun su numero de visitas: esperemos que funcione correctamente cuando tenga un numero de clientes elevado :S
-def extrae_enlace():
-	global cursor
-	r=cursor.execute("select url from enlaces order by explorado asc limit 1")#obtenemos uno de los enlaces menos visitados para no repetir
-	if r > 0:#si encontro un enlace listo para ser explorado en la DB
-		resultado=cursor.fetchall()#extraemos los datos
-		for result in resultado:#esto deberemos arreglarlo mas adelante, no es elegante usar un foreach cuando solo hemos extraido un solo dato (buscar documentacion sobre el modulo de mysql)
-			cursor.execute("update enlaces set explorado=explorado+1 where url='"+result[0]+"'") #aumentamos el contador de veces que hemos explorado el enlace
-		return result[0] #devolvemos el enlace que queremos explorar
-	else:
-		return "http://localhost" # si algo salio mal o si no hay enlaces ordenamos al cliente que espere (copon!!)
-
-def guarda_mime(msg):
-	global cursor
-	try:
-		print "Descarga encontrada"
-		mime=msg[3:].split(" ")
-		descarga=mime.pop(0)
-		mimetype=mime.pop(0)
-		cursor.execute("insert into descargas (url,mimetype) values ('"+descarga+"','"+mimetype+"')")
-	except:
-		print "No se Guardo la descarga con mimetype"
-
-
-# print "PyDirect Server V0.1\n(C) Juan Antonio Nache. 2008"
-print "naNbot85 Server v0.1\n(C) Juan Antonio Nache. 2008-2013"
-
-print "Conectando a la base de datos..."
-try:#no conectamos a la base de datos
-	cursor=mysql_conect()
-except:#si no pudimos lo comunicamos por pantalla y cerramos el programa
-	print "No se pudo establecer conexion con la base de datos. Cerrando"
-	sys.exit()
-
-print "Almacenando una copia de la base de datos en memoria."
-copyenlaces=[]
-copydescargas=[]
-
-print "Paso 1/2 Almacenando enlaces..."
-cursor.execute("select url from enlaces")
-resultado=cursor.fetchall()
-for result in resultado:
-	copyenlaces.append(result[0])
-print "Numero de enlaces: %s" % (str(len(copyenlaces)))
-
-print "Paso 2/2 Almacenando descargas..."
-cursor.execute("select url from descargas")
-resultado=cursor.fetchall()
-for result in resultado:
-	copydescargas.append(result[0])
-print "Numero de descargas: %s" % (str(len(copydescargas)))
-
+	
+"""
+This would be download also
+"""
+#	def guarda_mime(msg):
+#	global cursor
+#	try:
+#		print "Descarga encontrada"
+#		mime=msg[3:].split(" ")
+#		descarga=mime.pop(0)
+#		mimetype=mime.pop(0)
+#		cursor.execute("insert into descargas (url,mimetype) values ('"+descarga+"','"+mimetype+"')")
+#	except:
+#		print "No se Guardo la descarga con mimetype"
 
 class naNbotMain:
 	def __init__(self):
@@ -131,7 +104,6 @@ class naNbotMain:
 
 		self.server.listen(999) #max connections
 		self.desc = [self.server] #store the server sock first, necesary?
-		#self.cache=[] #definimos la cache de todos los datos encontrados, mas tarde procesaremos todo
 		self.IA=naNbotIA()
 
 	def mainLoop(self):
@@ -165,7 +137,8 @@ class naNbotMain:
 		try:
 			newsock, (remhost, remport) = self.server.accept()
 			self.server.settimeout(.1)
-			print "Ahaha! Nuevo cliente: %s:%s" % (str(remhost), str(remport))
+			print ("Ahaha! Nuevo cliente: %s:%s" % 
+					(str(remhost), str(remport)))
 			self.desc.append(newsock)
 		except:
 			pass
@@ -193,7 +166,7 @@ class naNbotIA:
 		#client ask what to do
 		elif msg[:2] == "Q?":
 			try:#extraemos un enlace
-				enlace=extrae_enlace()
+				enlace=self.worker.getLink()
 				return enlace #devolvemos el enlace para que el cliente lo explore
 			except:#si algo fue mal mandamos esperar al cliente
 				return "WAIT"
@@ -213,14 +186,23 @@ class naNbotIA:
 		#default option
 		else:
 			print "Algo extranio ha pasado. Un cliente ha muerto?"
-			return "WAIT" 
-			#Si el cliente muere inesperadamente es posible 
-			#que el servidor se haga la picha un lio por 
-			#algun tiempo, en ese caso enviamos WAIT. Si el 
-			#cliente por algun fallo no envia nada tambien 
-			#enviamos WAIT. Esto es poco eficiente, habra 
-			#que mejorarlo mas adelante
+			return "WAIT"
+			""" 
+			Si el cliente muere inesperadamente es posible 
+			que el servidor se haga la picha un lio por 
+			algun tiempo, en ese caso enviamos WAIT. Si el 
+			cliente por algun fallo no envia nada tambien 
+			enviamos WAIT. Esto es poco eficiente, habra 
+			que mejorarlo mas adelante
+			"""	
 
 
 
+
+
+
+# print "PyDirect Server V0.1\n(C) Juan Antonio Nache. 2008"
+print "naNbot85 Server v0.1\n(C) Juan Antonio Nache. 2008-2013"
+naNbot85 = naNbotMain()
+naNbot85.mainLoop()
 
