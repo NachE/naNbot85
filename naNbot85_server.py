@@ -13,7 +13,7 @@ class naNbotDB:
 	def __init__(self):
 		print ("[+] Starting DB...")
 		db=MySQLdb.connect(host='localhost',user='naNbot85',
-		passwd='naNbot85',db='naNbot85')
+			passwd='naNbot85',db='naNbot85')
 		self.cursor=db.cursor()
 
 	def query(self,query):
@@ -64,14 +64,16 @@ class naNbotWorker:
 		host = downs.pop(0)
 		for down in downs:
 			# TODO do it only if down dows not exist
-			self.DB.query("insert into descargas (url,origen) values ('"+descarga+"','"+host+"')")
+			self.DB.query("insert into descargas (url,origen)",
+					" values ('"+descarga+"','"+host+"')")
 
 
 	###
 	def getLink(self):
 		if self.DB.query("select url from enlaces order by explorado asc limit 1") > 1:
 			result = self.DB.fetchall()
-			self.DB.query("update enlaces set explorado=explorado+1 where url='"+result[0]+"'")
+			self.DB.query("update enlaces set explorado=explorado+1",
+					" where url='"+result[0]+"'")
 			return result[0]
 		else:
 			return "http://localhost" #TODO or maybe WAIT
@@ -87,20 +89,21 @@ This would be download also
 #		mime=msg[3:].split(" ")
 #		descarga=mime.pop(0)
 #		mimetype=mime.pop(0)
-#		cursor.execute("insert into descargas (url,mimetype) values ('"+descarga+"','"+mimetype+"')")
+#		cursor.execute("insert into descargas (url,mimetype)"
+#		" values ('"+descarga+"','"+mimetype+"')")
 #	except:
 #		print "No se Guardo la descarga con mimetype"
 
 class naNbotMain:
 	def __init__(self):
-		print "Fumando esperooo un cliente que no veooo... (Esperando clientes)"
+		print ("[i] Opening sockets..")
 		self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		try:#Probamos por el puerto 8510
+		try: #try port 8510
 			self.server.bind(("", 8510))
-			print "Puerto de escucha: 8510"
-		except:#Si por el anterior no podemos, probamos con el 8511
+			print "[i] Bind port: 8510"
+		except:#try port 8511
 			self.server.bind(("", 8511))
-			print "Puerto de escucha: 8511"
+			print "[i] Bind port: 8511"
 
 		self.server.listen(999) #max connections
 		self.desc = [self.server] #store the server sock first, necesary?
@@ -165,17 +168,19 @@ class naNbotIA:
 
 		#client ask what to do
 		elif msg[:2] == "Q?":
-			try:#extraemos un enlace
-				enlace=self.worker.getLink()
-				return enlace #devolvemos el enlace para que el cliente lo explore
-			except:#si algo fue mal mandamos esperar al cliente
+			try: #try to get link to explore
+				return self.worker.getLink()
+			except: #something wrong
 				return "WAIT"
 
 
 		#client ask if we are ready
 		elif msg[:2] == "RD":
-			return "OK" #now always yes. Add flow control in future.
-
+			return "OK" 
+			"""
+			TODO Now always yes
+			Add flow contro in a future
+			"""
 
 		#dont know yet
 		elif msg[:2] == "MI":
