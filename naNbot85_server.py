@@ -12,12 +12,20 @@ import MySQLdb
 class naNbotDB:
 	def __init__(self):
 		print ("[+] Starting DB...")
-		db=MySQLdb.connect(host='localhost',user='naNbot85',
+		self.db=MySQLdb.connect(host='localhost',user='naNbot85',
 			passwd='naNbot85',db='naNbot85')
-		self.cursor=db.cursor()
+		self.cursor=self.db.cursor()
 
 	def query(self,query):
-		return self.cursor.execute(query)		
+		print ("[i] DB exec query: %s" % query)
+		try:
+			ret = self.cursor.execute(query)
+		except:
+			self.db.rollback()
+			raise #uncomment for debug
+			ret = -1
+
+		return ret
 
 	def fetchall(self):
 		return self.cursor.fetchall()
@@ -39,7 +47,7 @@ class naNbotWorker:
 		for msg in self.cache:
 			links = msg[3:].split(" ") #3 first words out ("EN ") and links to array
 			if len(links) > 1: # >1 because first is the host and next the links
-				self.processLInks(links)
+				self.processLinks(links)
 
 	def processLinks(self,links):
 		host = links.pop(0) #extract host (first element)
@@ -70,11 +78,11 @@ class naNbotWorker:
 
 	###
 	def getLink(self):
-		if self.DB.query("select url from enlaces order by explorado asc limit 1") > 1:
+		if self.DB.query("select url from enlaces order by explorado asc limit 1") >= 1:
 			result = self.DB.fetchall()
-			self.DB.query("update enlaces set explorado=explorado+1",
-					" where url='"+result[0]+"'")
-			return result[0]
+			self.DB.query("update enlaces set explorado=explorado+1"
+					" where url='"+result[0][0]+"'")
+			return str(result[0][0])
 		else:
 			return "http://localhost" #TODO or maybe WAIT
 
@@ -121,20 +129,17 @@ class naNbotMain:
 				self.readSock(sock)
 
 	def readSock(self,sock):
-		try:
-			msg=sock.recv(1024)
-			sock.settimeout(.1) #necesary?
-			if msg == "quit": #if client want to quit
-				sock.send("quit") #confirm to client
-				self.desc.remove(sock) #delete from list
-			else:
-				if len(self.IA.msgClient(msg)) > 0:
-					sock.send(res) #send response to client
-				else:
-					print("No response to client.")
-		except:
-			print ("Client out") #maybe not... review this
-			self.desc.remove(sock)
+		
+		msg=sock.recv(1024)
+		sock.settimeout(.1) #necesary?
+		if msg == "quit": #if client want to quit
+			sock.send("quit") #confirm to client
+			self.desc.remove(sock) #delete from list
+		else:
+			sock.send( self.IA.msgClient(msg) ) #send response to client
+	#	except:
+	#		print ("Client out") #maybe not... review this
+	#		self.desc.remove(sock)
 
 	def waitcnx(self):
 		try:
@@ -153,7 +158,8 @@ class naNbotIA:
 		self.worker = naNbotWorker()
 
 
-	def msgClient(msg):
+	def msgClient(self,msg):
+		print "MSG", msg
 		#client found links
 		if   msg[:2] == "EN":
 			self.worker.foundLinks(msg)
@@ -168,10 +174,7 @@ class naNbotIA:
 
 		#client ask what to do
 		elif msg[:2] == "Q?":
-			try: #try to get link to explore
-				return self.worker.getLink()
-			except: #something wrong
-				return "WAIT"
+			return self.worker.getLink()
 
 
 		#client ask if we are ready
